@@ -81,7 +81,7 @@ const TodoApp = () => {
         </p>
       )}
 
-      <ul className="space-y-2">
+      <ul className="space-y-2 todos-container">
         {todos.map((todo, index) => (
           <li
             key={todo.id}
