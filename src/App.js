@@ -1,55 +1,105 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Card from "./components/ui/Card";
 import Button from "./components/ui/Button";
 import Input from "./components/ui/Input";
 import { Trash2, CheckSquare } from "lucide-react";
+
+const API_URL = "https://677fc40a0476123f76a7fe56.mockapi.io/api/v1/todos";
 
 const TodoApp = () => {
   const [todos, setTodos] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Bug 1: Doesn't trim whitespace from input, allowing empty space todos
-  const addTodo = () => {
+  // Fetch todos from MockAPI
+  useEffect(() => {
+    fetchTodos();
+  }, []);
+
+  const fetchTodos = async () => {
+    try {
+      const response = await fetch(API_URL);
+      const data = await response.json();
+      setTodos(data);
+    } catch (error) {
+      console.error("Failed to fetch todos:", error);
+    }
+  };
+
+  const addTodo = async () => {
     if (inputValue) {
-      setTodos([
-        ...todos,
-        {
-          id: todos.length, // Bug 2: Using array length as ID can cause duplicates on deletion
+      try {
+        const newTodo = {
+          id: todos.length + 1, // Bug: Using length as ID causes duplicates
           text: inputValue,
           completed: false,
           createdAt: new Date().toISOString(),
-        },
-      ]);
-      setInputValue("");
-      setErrorMessage("");
+        };
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newTodo),
+        });
+        const addedTodo = await response.json();
+        setTodos([
+          ...todos,
+          {
+            id: todos.length + 1, // Bug: Using length as ID causes duplicates
+            ...addedTodo,
+          },
+        ]);
+        setInputValue("");
+        setErrorMessage("");
+      } catch (error) {
+        console.error("Failed to add todo:", error);
+      }
     } else {
       setErrorMessage("Todo cannot be empty");
     }
   };
 
-  // Bug 3: Doesn't update completed status correctly when there are multiple items
-  const toggleComplete = (id) => {
-    const newTodos = todos.map((todo) => {
-      if (todo.id === id) {
-        return { ...todo, completed: !todo.completed };
+  const toggleComplete = async (id) => {
+    try {
+      const todo = todos.find((t) => t.id === id);
+      const response = await fetch(`${API_URL}/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...todo, completed: !todo.completed }),
+      });
+      if (response.ok) {
+        const updatedTodos = todos.map((todo) => {
+          if (todo.id === id) {
+            return { ...todo, completed: !todo.completed }; // Bug: Redundant updates for other todos
+          }
+          return { ...todo, completed: todo.completed };
+        });
+        setTodos(updatedTodos);
       }
-      return { ...todo, completed: todo.completed }; // unnecessarily updates all todos
-    });
-    setTodos(newTodos);
+    } catch (error) {
+      console.error("Failed to toggle complete:", error);
+    }
   };
 
-  // Bug 4: Deletion sometimes leaves orphaned items due to array index issues
-  const deleteTodo = (id) => {
-    setTodos(todos.filter((_, index) => index !== id)); // using index instead of todo.id
+  const deleteTodo = async (id) => {
+    try {
+      const resp = await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+      const data = await resp.json();
+      console.log({ data });
+      if (data === "Not found") {
+        throw new Error("Todo not found");
+      }
+      // Bug: Use the index instead of the todo's id to filter
+      setTodos(todos.filter((_, index) => index + 1 !== id));
+    } catch (error) {
+      console.error("Failed to delete todo:", error);
+    }
   };
 
-  // Bug 5: Enter key handling is inconsistent
   const handleKeyPress = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       if (e.shiftKey) {
-        // Bug: Shift+Enter doesn't work as expected
+        // Bug: Shift+Enter has no defined behavior
         return;
       }
       addTodo();
@@ -106,7 +156,7 @@ const TodoApp = () => {
               </span>
             </div>
             <button
-              onClick={() => deleteTodo(todo.id)}
+              onClick={() => deleteTodo(index + 1)}
               className="text-red-500 p-1 rounded hover:bg-red-50"
               data-testid={`delete-button-${index}`}
             >
